@@ -14,6 +14,8 @@ get_vaxpolitics_data <- function() {
     #' `df`: the joined dataframe;
     #' `vaxcolnames`: the columns that came from the vaccination data;
     #' `vaxfileinfo`: the first two lines of the vaccination file (date info).
+    #' `cdtcolnames`: the columns that came from the cases/deaths/testing data;
+    #' `cdtfileinfo`: the first two lines of the cases/deaths/testing file (date info).
     elections_file <- 'data/1976-2020-president.csv'
     elections_raw <- read_csv(elections_file)
     elections <- elections_raw %>%
@@ -25,9 +27,9 @@ get_vaxpolitics_data <- function() {
         pivot_wider(names_from = party_simplified, values_from = -c(state,state_po,party_simplified))
     election_states<- elections$state
 
+    # VAX DATA
     vaccinations_file <- 'data/covid19_vaccinations_in_the_united_states.csv'
     vaccination_file_info <- readLines(file(vaccinations_file,'r'),2)
-
     # read in vaccinations data
     vaccinations_raw <- read_csv(vaccinations_file, skip = 2)
     vaccinations <- vaccinations_raw %>%
@@ -37,16 +39,35 @@ get_vaxpolitics_data <- function() {
     vaccinations$state <- gsub("NEW YORK STATE", "NEW YORK", vaccinations$state)
     vaccination_colnames <- colnames(vaccinations)
     vacc_states <- vaccinations$state
+
+    # CASES/DEATHS/TESTING DATA
+    cdt_file <- 'data/united_states_covid19_cases_deaths_and_testing_by_state.csv'
+    cdt_file_info <- readLines(file(cdt_file,'r'),2)
+    # read in cdt data
+    cdt_raw <- read_csv(cdt_file, skip = 2)
+    cdt <- cdt_raw %>%
+        mutate(state = `State/Territory` %>% str_to_upper()) %>%
+        select(-`State/Territory`)
+    # TODO: there's a problem in this data: NEW YORK and NEW YORK CITY are separate...
+    cdt_colnames <- colnames(cdt)
+    cdt_states <- cdt$state
+
+
     # should be 51 'states' (the states plus DC)
-    states <- intersect(vacc_states,election_states)
+    states <- intersect(vacc_states, election_states)
 
     vaxelect <- inner_join(elections,vaccinations) %>% select(state, everything())
+    cdtelect <- inner_join(elections,cdt) %>% select(state, everything())
     # it's nicer to have state names in title case if I want to use them
     vaxelect$state <- vaxelect$state %>% str_to_title() %>% gsub("Of", "of", .)
+    cdtelect$state <- vaxelect$state %>% str_to_title() %>% gsub("Of", "of", .)
 
-    return(list("df" = vaxelect,
+    return(list("vaxelect_df" = vaxelect,
                 "vaxcolnames" = vaccination_colnames,
-                "vaxfileinfo" = vaccination_file_info))
+                "vaxfileinfo" = vaccination_file_info,
+                "cdtelect_df" = cdtelect,
+                "cdtcolnames" = cdt_colnames,
+                "cdtfileinfo" = cdt_file_info))
 }
 
 plot_vaxelect <- function(data, xcolumn_str, ycolumn_str) {
@@ -82,32 +103,41 @@ plot_vaxelect <- function(data, xcolumn_str, ycolumn_str) {
 }
 
 vaxpolitics_data <- get_vaxpolitics_data()
-vaxelect <- vaxpolitics_data$df
+
+vaxelect <- vaxpolitics_data$vaxelect_df
 vaccination_column_choices <- vaxpolitics_data$vaxcolnames[vaxpolitics_data$vaxcolnames != 'state']
 
-metrics_choices = c("metrics proportional to population", "all vaccination metrics")
+cdtelect <- vaxpolitics_data$cdtelect_df
+cdt_column_choices <- vaxpolitics_data$cdtcolnames[vaxpolitics_data$cdtcolnames != 'state']
+
+metrics_choices = c("metrics proportional to population", "all metrics")
 
 vaxmetric_choices_all <- vaccination_column_choices
 vaxmetric_choices_prop <- vaccination_column_choices %>% grep("(.*per\ .*$)|(Percent.*$)", ., value=T)
 # We could also included only nonproportional metrics, but seems pointless
 # vaxmetric_choices_nonprop <- setdiff(vaxmetric_choices_all,vaxmetric_choices_prop)
 
+# remove the % columns like Total % Positive, which are non-numeric
+cdt_choices_all <- cdt_column_choices[!grepl("%", cdt_column_choices)]
+cdt_choices_prop <- cdt_choices_all %>% grep("(.*per\ .*$)", ., value=T)
 
 # Define UI for application
 ui <- fluidPage(
     # Application title
-    titlePanel("US COVID vaccination rates vs. 2020 presidential politics"),
+    titlePanel("US COVID stats vs. 2020 presidential politics"),
 
     # Vertical layout for page with
     verticalLayout(
         div(
+            h3("Vaccination rates vs politics"),
             # Vaccination metrics set selector with a radio button
             # The population-proportional subset of metrics are more easy to interpret,
             # but I want to leave the option to look at all the metrics provided by the CDC
             p("Select which vaccination metric you are interested in, and see it plotted against 2020 presidential politics."),
+            p("By default only the metrics that are proportional to population (like, 'Doses Delivered per 100K') are included. You can choose to include all metrics instead if you want."),
             radioButtons(
                 inputId = "vaxmetric_selector",
-                label = "Choose set of vaccination metrics (changes the contents of the box below):",
+                label = "Choose set of metrics (changes the contents of the boxes below):",
                 choices = metrics_choices,
                 inline = TRUE,
                 selected = metrics_choices[1]
@@ -127,15 +157,38 @@ ui <- fluidPage(
         ),
         plotOutput("vaxelectPlot"),
         div(
-            p("correlation coefficient r = ", textOutput("corrText", inline=T)),
+            p("correlation coefficient r = ", textOutput("vaxelect_corrText", inline=T)),
             align="center"
             ),
         div(
-            h4("Data sources"),
+            h3("Cases/Testing/Deaths vs politics"),
+            p("Select which vaccination metric you are interested in, and see it plotted against 2020 presidential politics."),
+            p("By default only the metrics that are proportional to population (like, '7-Day Cases Rate per 100000') are included. You can choose to include all metrics instead, if you want, by selecting 'all metrics' with the radio button above."),
+            selectInput(
+                inputId = "cdt_choice",
+                label = "Select a cases/testing/deaths metric (to plot on y-axis)",
+                width="100%",
+                size = 5,
+                selectize = F,
+                choices = cdt_choices_all,
+                selected = "7-Day Cases Rate per 100000"
+            ),
+        ),
+        plotOutput("cdtelectPlot"),
+        div(
+            p("correlation coefficient r = ", textOutput("cdtelect_corrText", inline=T)),
+            align="center"
+        ),
+        div(
+            h2("Data sources"),
             p("Vaccination data from CDC, downloaded from here:",
               a(vaxpolitics_data$vaxfileinfo[1],
                 href="https://covid.cdc.gov/covid-data-tracker/#vaccinations", .noWS = "after"), ".",
               em(vaxpolitics_data$vaxfileinfo[2], .noWS = "after"), "."),
+            p("Cases/testing/deaths data from CDC, downloaded from here:",
+              a(vaxpolitics_data$cdtfileinfo[1],
+                href="https://covid.cdc.gov/covid-data-tracker/#cases_casesper100klast7days", .noWS = "after"), ".",
+              em(vaxpolitics_data$cdtfileinfo[2], .noWS = "after"), "."),
             p("Election data downloaded from",
               a("MIT EDSL", href="https://electionlab.mit.edu/"),
               "downloaded here:",
@@ -159,11 +212,13 @@ server <- function(input, output, session) {
     # the user changes the radio button value.
     observeEvent(input$vaxmetric_selector,
                  {
-                     if (input$vaxmetric_selector == "all vaccination metrics") {
+                     if (input$vaxmetric_selector == "all metrics") {
                          vaxmetric_choices <- vaxmetric_choices_all
+                         cdt_choices <- cdt_choices_all
                      }
                      else {
                          vaxmetric_choices <- vaxmetric_choices_prop
+                         cdt_choices <- cdt_choices_prop
                      }
                      updateSelectInput(
                          session,
@@ -177,13 +232,33 @@ server <- function(input, output, session) {
                                        input$vaxmetric_choice)
                      })
 
-                     output$corrText <- renderText({
+                     output$vaxelect_corrText <- renderText({
                          round(cor(
                              as.numeric(unlist(vaxelect[input$vaxmetric_choice])),
                              vaxelect$`%vote_REPUBLICAN`),
                              4)
                      })
-                 })
+
+                     updateSelectInput(
+                         session,
+                         inputId = "cdt_choice",
+                         choices = cdt_choices,
+                         selected = "7-Day Cases Rate per 100000")
+
+                     output$cdtelectPlot <- renderPlot({
+                         plot_vaxelect(cdtelect,
+                                       "%vote_REPUBLICAN",
+                                       input$cdt_choice)
+                     })
+
+                     output$cdtelect_corrText <- renderText({
+                         round(cor(
+                             as.numeric(unlist(cdtelect[input$cdt_choice])),
+                             cdtelect$`%vote_REPUBLICAN`),
+                             4)
+                     })
+
+    })
 }
 
 # Run the application
