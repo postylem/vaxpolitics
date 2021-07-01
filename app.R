@@ -1,7 +1,4 @@
 # # This is a shiny app for visualizing covid vaccinations vs 2020 presidential politics
-# # Deploy like this:
-# load(rsconnect)
-# rsconnect::deployApp('~/Desktop/coviddata/vaxpolitics/')
 
 library(shiny)
 library(tidyverse)
