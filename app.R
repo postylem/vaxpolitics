@@ -1,4 +1,4 @@
-# # This is a shiny app for visualizing covid vaccinations vs 2020 presidential politics
+# This is a shiny app for visualizing COVID vaccinations vs 2020 presidential politics by state
 
 library(shiny)
 library(tidyverse)
