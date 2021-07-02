@@ -35,7 +35,8 @@ get_vaxpolitics_data <- function() {
     vaccinations <- vaccinations_raw %>%
         mutate(state = `State/Territory/Federal Entity` %>% str_to_upper()) %>%
         select(-`State/Territory/Federal Entity`)
-    # Hand adjust to make the states names all match... it's just new york that was a problem
+    # Hand adjust to make the states names all match... it's just New York that was a problem
+    # note that NYC does not appear separately in this data, so this renaming isn't ambiguous
     vaccinations$state <- gsub("NEW YORK STATE", "NEW YORK", vaccinations$state)
     vaccination_colnames <- colnames(vaccinations)
     vacc_states <- vaccinations$state
@@ -49,6 +50,7 @@ get_vaxpolitics_data <- function() {
         mutate(state = `State/Territory` %>% str_to_upper()) %>%
         select(-`State/Territory`)
     # TODO: there's a problem in this data: NEW YORK and NEW YORK CITY are separate...
+    # For now, I am just using the row labeled New York, and ignoring New York CIty
     cdt_colnames <- colnames(cdt)
     cdt_states <- cdt$state
 
