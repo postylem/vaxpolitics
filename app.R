@@ -52,6 +52,7 @@ get_vaxpolitics_data <- function() {
     # TODO: there's a problem in this data: NEW YORK and NEW YORK CITY are separate...
     # For now, I am just using the row labeled New York, and ignoring New York CIty
     cdt_colnames <- colnames(cdt)
+    cdt$state <- sub("NEW YORK*", "NEW YORK", cdt$state, fixed=T)
     cdt_states <- cdt$state
 
 
