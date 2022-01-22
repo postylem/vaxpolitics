@@ -29,9 +29,9 @@ get_vaxpolitics_data <- function() {
 
     # VAX DATA
     vaccinations_file <- 'data/covid19_vaccinations_in_the_united_states.csv'
-    vaccination_file_info <- readLines(file(vaccinations_file,'r'),2)
+    vaccination_file_info <- readLines(file(vaccinations_file,'r'), 3)
     # read in vaccinations data
-    vaccinations_raw <- read_csv(vaccinations_file, skip = 2)
+    vaccinations_raw <- read_csv(vaccinations_file, skip = 3)
     vaccinations <- vaccinations_raw %>%
         mutate(state = `State/Territory/Federal Entity` %>% str_to_upper()) %>%
         select(-`State/Territory/Federal Entity`)
